@@ -50,3 +50,9 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Platformio
+.pioenvs
+.piolibdeps
+.clang_complete
+.gcc-flags.json
