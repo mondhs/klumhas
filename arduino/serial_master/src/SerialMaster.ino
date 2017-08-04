@@ -1,8 +1,30 @@
 #include <SoftwareSerial.h>
+#include <SPI.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include "nRF24L01.h"
+#include "RF24.h"
 
 SoftwareSerial masterSerial(5, 6); // RX, TX
 String inputString = "";         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
+
+/****************** User Config ***************************/
+
+/* Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 */
+RF24 radio(7,8);
+const uint64_t pipes[2] = { 0xABCDABCD71LL, 0x544d52687CLL };   // Radio pipe addresses for the 2 nodes to communicate.
+
+struct dataStruct{
+  byte response;
+  bool ledState;
+  int temperature;
+}myData;
+
+String REQUEST_RFLAMP1_ON=String("RFSTATE?lamp1=on;");
+String REQUEST_RFLAMP1_OFF=String("RFSTATE?lamp1=off;");
+
+/**********************************************************/
 
 void setup() {
   Serial.begin(9600);
@@ -11,13 +33,23 @@ void setup() {
   }
   //debug info
   //Serial.println("Master is prepared");
-  
+
   // set the data rate for the SoftwareSerial port
   masterSerial.begin(9600);
+
+  ////// RADIO ////
+  radio.begin();
+  radio.setAutoAck(1);                    // Ensure autoACK is enabled
+  radio.enableAckPayload();               // Allow optional ack payloads
+  radio.setRetries(0,15);                 // Smallest time between retries, max no. of retries
+  radio.setPayloadSize(sizeof(myData));                // Here we are sending 1-byte payloads to test the call-response speed
+  radio.openWritingPipe(pipes[1]);        // Both radios listen on the same pipes by default, and switch when writing
+  radio.openReadingPipe(1,pipes[0]);
+  radio.startListening();                 // Start listening
+
 }
 
 void loop() {
-  masterSerial.listen();
   while (Serial.available()) {
     // get the new byte:
     char inChar = (char)Serial.read();
@@ -33,12 +65,18 @@ void loop() {
 
   if (stringComplete) {
     inputString.trim();
-    //Serial.println(inputString);
-    masterSerial.println(inputString);
+    if(inputString == REQUEST_RFLAMP1_ON){
+      myData.ledState = HIGH;
+    }else if(inputString == REQUEST_RFLAMP1_OFF){
+      myData.ledState = LOW;
+    }else{
+      //Serial.println(inputString);
+      masterSerial.println(inputString);
+    }
     // clear the string:
     inputString = "";
     stringComplete = false;
-  }  
+  }
   //masterSerial.println(String("DATA?"));
   //delay(2000);
   if (masterSerial.available()) {
@@ -49,37 +87,43 @@ void loop() {
     if(command.length() == 0){
       //noop;
     }else if(command==String("DATA")){
-      //readSlaveData();
+      readSlaveData();
       String params = masterSerial.readStringUntil('\n');
-      Serial.println(params); 
+      params = params + ";tempRF:" + myData.temperature;
+      Serial.println(params);
     }else if(command==String("PONG")){
-      Serial.println(command);  
+      Serial.println(command);
     }else if(command==String("STATE")){
       Serial.println(command);
       String params = masterSerial.readStringUntil('\n');
-      Serial.println(params);  
+      Serial.println(params);
     }else{
       Serial.print("Unknown command: ");
-      Serial.println(command);  
+      Serial.println(command);
       String params = masterSerial.readStringUntil('\n');
       Serial.println(params);
     }
     //debug info
     //Serial.println("----");
   }
+
+  byte pipeNo;
+  while (radio.available(&pipeNo)) {                             // Dump the payloads until we've gotten everything
+    radio.read( &myData, sizeof(myData) );
+    printf("Got response %d, temp: %d\n\r",myData.response, myData.temperature);
+    radio.writeAckPayload(pipeNo,&myData, sizeof(myData));
+  }
+
 }
 
 
 void readSlaveData(){
-  String paramKey = masterSerial.readStringUntil(':');
-  String paramVal = masterSerial.readStringUntil(';');
-  Serial.println(paramKey + String("=") + paramVal );
-  while(paramKey!=String("paramNo")){
-    paramKey = masterSerial.readStringUntil(':');
-    paramVal = masterSerial.readStringUntil(';');
-    Serial.println(paramKey + String("=") + paramVal );
-  }
+ String paramKey = masterSerial.readStringUntil(':');
+ String paramVal = masterSerial.readStringUntil(';');
+ Serial.println(paramKey + String("=") + paramVal );
+ while(paramKey!=String("paramNo")){
+   paramKey = masterSerial.readStringUntil(':');
+   paramVal = masterSerial.readStringUntil(';');
+   Serial.println(paramKey + String("=") + paramVal );
+ }
 }
-
-
-
