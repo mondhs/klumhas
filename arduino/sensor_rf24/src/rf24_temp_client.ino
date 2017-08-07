@@ -3,15 +3,15 @@
   // Parts derived from examples by J. Coliz <maniacbug@ymail.com>
 */
 /**
- * Example for efficient call-response using ack-payloads 
+ * Example for efficient call-response using ack-payloads
  *
  * This example continues to make use of all the normal functionality of the radios including
  * the auto-ack and auto-retry features, but allows ack-payloads to be written optionally as well.
- * This allows very fast call-response communication, with the responding radio never having to 
+ * This allows very fast call-response communication, with the responding radio never having to
  * switch out of Primary Receiver mode to send back a payload, but having the option to if wanting
  * to initiate communication instead of respond to a commmunication.
  */
- 
+
 
 #include <avr/sleep.h>
 #include <avr/wdt.h>
@@ -33,14 +33,14 @@ short foundSensors = 0;
 #define BOUNCE_DURATION 200   // define an appropriate bounce time in ms for your switches
 volatile unsigned long bounceTime=0; // variable to hold ms count to debounce a pressed switch
 
-
+#include <Wire.h>
 #include <U8x8lib.h>
 U8X8_SSD1306_128X64_NONAME_SW_I2C u8x8(/* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);
 volatile uint8_t is_enable_screen_saver =1;
 
 
 
-// Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8 
+// Hardware configuration: Set up nRF24L01 radio on SPI bus plus pins 7 & 8
 RF24 radio(7,8);
 
 // Topology
@@ -52,13 +52,19 @@ byte counter = 1;
 
 struct dataStruct{
   byte response;
-  bool ledState;
+  bool lightState;
   int temperature;
+  long vcc;
 }myData;
 
+///LIGHT CONTROL
+const int lightControlPin = 9;
+
 void setup(){
+  pinMode(lightControlPin, OUTPUT);
+
   myData.response = counter;
-  myData.ledState = LOW;
+  myData.lightState = LOW;
   myData.temperature = 0;
   Serial.begin(115200);
   printf_begin();
@@ -97,33 +103,38 @@ void setup(){
 
 void loop(void) {
 
+  myData.response = counter;
+  myData.temperature=readFirstTemperature();
+  myData.vcc = readVcc();
+
+
     radio.powerUp();
     radio.stopListening();                                  // First, stop listening so we can talk.
-    myData.temperature=readFirstTemperature();
     u8x8.setCursor(6, 0);
     u8x8.print(((float)myData.temperature)/100);
     u8x8.drawString(1,1,"    ");
     u8x8.setCursor(1, 1);
     u8x8.print(counter);
-    
-    unsigned long time = micros();                          // Take the time, and send it.  This will block until complete   
-    myData.response = counter;
-   
+    u8x8.setCursor(2, 2);
+    u8x8.print(myData.vcc);
+
     printf("Now sending %d as payload. \n",counter);
 
+    unsigned long time = micros();                          // Take the time, and send it.  This will block until complete
+
+
     if (!radio.write( &myData, sizeof(myData) )){
-      Serial.println(F("failed."));      
+      Serial.println(F("failed."));
     }else{
-      if(!radio.available()){ 
-        Serial.println(F("Blank Payload Received.")); 
+      if(!radio.available()){
+        Serial.println(F("Blank Payload Received."));
       }else{
         while(radio.available() ){
           unsigned long tim = micros();
           radio.read( &myData, sizeof(myData) );
           unsigned long roundTrip = tim-time;
 
-          counter++;
-          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",myData.response,roundTrip, myData.ledState);
+          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",myData.response,roundTrip, myData.lightState);
 
           u8x8.drawString(6,1,"    ");
           u8x8.setCursor(6, 1);
@@ -132,44 +143,46 @@ void loop(void) {
           u8x8.drawString(11,1,"    ");
           u8x8.setCursor(11, 1);
           u8x8.print(roundTrip);
-          
+
+          digitalWrite(lightControlPin, myData.lightState);
+
 
         }
       }
-
     }
+    counter++;
     // Try again later
     //delay(1000);
 
     ///////////////////////////////////////
     //deepsleep
     radio.powerDown();
-    
+
     // disable ADC
-    ADCSRA = 0;  
-  
+    ADCSRA = 0;
+
     // clear various "reset" flags
-    MCUSR = 0;     
+    MCUSR = 0;
     // allow changes, disable reset
     WDTCSR = bit (WDCE) | bit (WDE);
-    // set interrupt mode and an interval 
+    // set interrupt mode and an interval
 //    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
     WDTCSR = bit (WDIE) | bit (WDP3) | bit (WDP0);    // set WDIE, and 8 seconds delay
     wdt_reset();  // pat the dog
-    
-    set_sleep_mode (SLEEP_MODE_PWR_DOWN);  
+
+    set_sleep_mode (SLEEP_MODE_PWR_DOWN);
     noInterrupts ();           // timed sequence follows
     sleep_enable();
-   
+
     // turn off brown-out enable in software
     MCUCR = bit (BODS) | bit (BODSE);
-    MCUCR = bit (BODS); 
+    MCUCR = bit (BODS);
     interrupts ();             // guarantees next instruction executed
-    sleep_cpu ();  
-    
+    sleep_cpu ();
+
     // cancel sleep as a precaution
     sleep_disable();
-  
+
 }
 
 
@@ -187,7 +200,7 @@ void initDS_temperature(){
       delay(250);
       break;
     }
-  } 
+  }
 }
 
 /**
@@ -260,10 +273,38 @@ ISR (INT0_vect){
 
 }
 
+
 ////// watchdog
 
 // watchdog interrupt
-ISR (WDT_vect) 
+ISR (WDT_vect)
 {
    wdt_disable();  // disable watchdog
 }  // end of WDT_vect
+
+
+long readVcc() {
+  // Read 1.1V reference against AVcc
+  // set the reference to Vcc and the measurement to the internal 1.1V reference
+  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+    ADMUX = _BV(MUX5) | _BV(MUX0);
+  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
+    ADMUX = _BV(MUX3) | _BV(MUX2);
+  #else
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #endif
+
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Start conversion
+  while (bit_is_set(ADCSRA,ADSC)); // measuring
+
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
+  uint8_t high = ADCH; // unlocks both
+
+  long result = (high<<8) | low;
+
+  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+  return result; // Vcc in millivolts
+}

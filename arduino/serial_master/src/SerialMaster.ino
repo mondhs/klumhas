@@ -17,8 +17,9 @@ const uint64_t pipes[2] = { 0xABCDABCD71LL, 0x544d52687CLL };   // Radio pipe ad
 
 struct dataStruct{
   byte response;
-  bool ledState;
+  bool lightState;
   int temperature;
+  long vcc;
 }myData;
 
 String REQUEST_RFLAMP1_ON=String("RFSTATE?lamp1=on;");
@@ -66,9 +67,9 @@ void loop() {
   if (stringComplete) {
     inputString.trim();
     if(inputString == REQUEST_RFLAMP1_ON){
-      myData.ledState = HIGH;
+      myData.lightState = HIGH;
     }else if(inputString == REQUEST_RFLAMP1_OFF){
-      myData.ledState = LOW;
+      myData.lightState = LOW;
     }else{
       //Serial.println(inputString);
       masterSerial.println(inputString);
@@ -110,8 +111,8 @@ void loop() {
   byte pipeNo;
   while (radio.available(&pipeNo)) {                             // Dump the payloads until we've gotten everything
     radio.read( &myData, sizeof(myData) );
-    printf("Got response %d, temp: %d\n\r",myData.response, myData.temperature);
     radio.writeAckPayload(pipeNo,&myData, sizeof(myData));
+    printf("Got response %d, temp: %d\n\r",myData.response, myData.temperature);
   }
 
 }
