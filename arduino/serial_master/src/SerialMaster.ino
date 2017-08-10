@@ -19,7 +19,7 @@ struct dataStruct{
   byte response;
   bool lightState;
   int temperature;
-  long vcc;
+  // long vcc;
 }myData;
 
 String REQUEST_RFLAMP1_ON=String("RFSTATE?lamp1=on;");

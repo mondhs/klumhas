@@ -54,7 +54,7 @@ struct dataStruct{
   byte response;
   bool lightState;
   int temperature;
-  long vcc;
+  // long vcc;
 }myData;
 
 ///LIGHT CONTROL
@@ -66,7 +66,7 @@ void setup(){
   myData.response = counter;
   myData.lightState = LOW;
   myData.temperature = 0;
-  Serial.begin(115200);
+  Serial.begin(9600);
   printf_begin();
   Serial.print(F("\n\rRF24 client/\n\r"));
 
@@ -105,7 +105,7 @@ void loop(void) {
 
   myData.response = counter;
   myData.temperature=readFirstTemperature();
-  myData.vcc = readVcc();
+  // myData.vcc = readVcc();
 
 
     radio.powerUp();
@@ -116,7 +116,7 @@ void loop(void) {
     u8x8.setCursor(1, 1);
     u8x8.print(counter);
     u8x8.setCursor(2, 2);
-    u8x8.print(myData.vcc);
+    // u8x8.print(myData.vcc);
 
     printf("Now sending %d as payload. \n",counter);
 
@@ -166,8 +166,8 @@ void loop(void) {
     // allow changes, disable reset
     WDTCSR = bit (WDCE) | bit (WDE);
     // set interrupt mode and an interval
-//    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
-    WDTCSR = bit (WDIE) | bit (WDP3) | bit (WDP0);    // set WDIE, and 8 seconds delay
+    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
+    // WDTCSR = bit (WDIE) | bit (WDP3) | bit (WDP0);    // set WDIE, and 8 seconds delay
     wdt_reset();  // pat the dog
 
     set_sleep_mode (SLEEP_MODE_PWR_DOWN);
@@ -234,7 +234,7 @@ float findTemperature(byte *addr){
   ds.select(addr);
   ds.write(0x44,1); // start conversion, with parasite   on at the end
 
-  byte present = ds.reset();
+  ds.reset();
   ds.select(addr);
   ds.write(0xBE); // Read Scratchpad
 
