@@ -50,12 +50,13 @@ const uint64_t pipes[2] = { 0xABCDABCD71LL, 0x544d52687CLL };              // Ra
 // A single byte to keep track of the data being sent back and forth
 byte counter = 1;
 
-struct dataStruct{
+typedef struct MyDataStruct{
   byte response;
   bool lightState;
   int temperature;
   // long vcc;
-}myData;
+} MyDataStruct_t;
+MyDataStruct_t myData;
 
 ///LIGHT CONTROL
 const int lightControlPin = 9;
@@ -94,7 +95,7 @@ void setup(){
   radio.setAutoAck(1);                    // Ensure autoACK is enabled
   radio.enableAckPayload();               // Allow optional ack payloads
   radio.setRetries(0,15);                 // Smallest time between retries, max no. of retries
-  radio.setPayloadSize(sizeof(myData));                // Here we are sending 1-byte payloads to test the call-response speed
+  radio.setPayloadSize(sizeof(MyDataStruct_t));                // Here we are sending 1-byte payloads to test the call-response speed
   radio.openWritingPipe(pipes[0]);
   radio.openReadingPipe(1,pipes[1]);
 
@@ -131,10 +132,11 @@ void loop(void) {
       }else{
         while(radio.available() ){
           unsigned long tim = micros();
-          radio.read( &myData, sizeof(myData) );
+          MyDataStruct_t responseData;
+          radio.read( &responseData, sizeof(MyDataStruct_t) );
           unsigned long roundTrip = tim-time;
 
-          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",myData.response,roundTrip, myData.lightState);
+          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",responseData.response,roundTrip, responseData.lightState);
 
           u8x8.drawString(6,1,"    ");
           u8x8.setCursor(6, 1);
@@ -144,7 +146,7 @@ void loop(void) {
           u8x8.setCursor(11, 1);
           u8x8.print(roundTrip);
 
-          digitalWrite(lightControlPin, myData.lightState);
+          digitalWrite(lightControlPin, responseData.lightState);
 
 
         }

@@ -15,12 +15,13 @@ boolean stringComplete = false;  // whether the string is complete
 RF24 radio(7,8);
 const uint64_t pipes[2] = { 0xABCDABCD71LL, 0x544d52687CLL };   // Radio pipe addresses for the 2 nodes to communicate.
 
-struct dataStruct{
+typedef struct MyDataStruct{
   byte response;
   bool lightState;
   int temperature;
   // long vcc;
-}myData;
+} MyDataStruct_t;
+MyDataStruct_t myData;
 
 String REQUEST_RFLAMP1_ON=String("RFSTATE?lamp1=on;");
 String REQUEST_RFLAMP1_OFF=String("RFSTATE?lamp1=off;");
@@ -43,7 +44,7 @@ void setup() {
   radio.setAutoAck(1);                    // Ensure autoACK is enabled
   radio.enableAckPayload();               // Allow optional ack payloads
   radio.setRetries(0,15);                 // Smallest time between retries, max no. of retries
-  radio.setPayloadSize(sizeof(myData));                // Here we are sending 1-byte payloads to test the call-response speed
+  radio.setPayloadSize(sizeof(MyDataStruct_t));                // Here we are sending 1-byte payloads to test the call-response speed
   radio.openWritingPipe(pipes[1]);        // Both radios listen on the same pipes by default, and switch when writing
   radio.openReadingPipe(1,pipes[0]);
   radio.startListening();                 // Start listening
@@ -110,8 +111,10 @@ void loop() {
 
   byte pipeNo;
   while (radio.available(&pipeNo)) {                             // Dump the payloads until we've gotten everything
-    radio.read( &myData, sizeof(myData) );
-    radio.writeAckPayload(pipeNo,&myData, sizeof(myData));
+    MyDataStruct_t requestData;
+    radio.read( &requestData, sizeof(MyDataStruct_t) );
+    myData.response =  requestData.response;
+    radio.writeAckPayload(pipeNo,&myData, sizeof(MyDataStruct_t));
     printf("Got response %d, temp: %d\n\r",myData.response, myData.temperature);
   }
 
