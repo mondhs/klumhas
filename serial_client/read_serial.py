@@ -1,22 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from time import strftime
 from time import sleep
 
 def readSensor():
     import serial
-    ser = serial.Serial('/dev/ttyUSB0', baudrate=9600, timeout =1)
+    ser = serial.Serial('/dev/ttyUSB0', baudrate=9600, timeout =0)
     sleep(3)
-    ser.write('DATA?\n')
+    ser.write('DATA?\n'.encode())
     sleep(2)
-    msg = ser.read(ser.inWaiting())
-    return "time:"+strftime("%Y%m%d_%H%M%S")+";"+msg.strip()
+    msg = ser.readall().decode()#.replace("\n",";")
+    return "time:"+strftime("%Y%m%d_%H%M%S")+"\n"+msg.strip()
 
-def transform(message):
-    messageArr = message.rstrip(";").split(";")
-    messageMap = dict(item.split(":") for item in message.rstrip(";").split(";"))
-    return ";".join([messageMap["time"],messageMap["temp0"],messageMap["temp1"],messageMap["light"]])
 
 msg="time:20161027_202517;temp0:32.63;temp1:29.00;humid:10.25;light:326;paramNo:4;"
 msg=readSensor()
-print transform(msg)
+print(msg)
 

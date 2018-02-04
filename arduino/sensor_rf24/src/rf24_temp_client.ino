@@ -50,13 +50,12 @@ const uint64_t pipes[2] = { 0xABCDABCD71LL, 0x544d52687CLL };              // Ra
 // A single byte to keep track of the data being sent back and forth
 byte counter = 1;
 
-typedef struct MyDataStruct{
+struct dataStruct{
   byte response;
   bool lightState;
   int temperature;
-  // long vcc;
-} MyDataStruct_t;
-MyDataStruct_t myData;
+  long vcc;
+}myData;
 
 ///LIGHT CONTROL
 const int lightControlPin = 9;
@@ -67,7 +66,7 @@ void setup(){
   myData.response = counter;
   myData.lightState = LOW;
   myData.temperature = 0;
-  Serial.begin(9600);
+  Serial.begin(115200);
   printf_begin();
   Serial.print(F("\n\rRF24 client/\n\r"));
 
@@ -95,7 +94,7 @@ void setup(){
   radio.setAutoAck(1);                    // Ensure autoACK is enabled
   radio.enableAckPayload();               // Allow optional ack payloads
   radio.setRetries(0,15);                 // Smallest time between retries, max no. of retries
-  radio.setPayloadSize(sizeof(MyDataStruct_t));                // Here we are sending 1-byte payloads to test the call-response speed
+  radio.setPayloadSize(sizeof(myData));                // Here we are sending 1-byte payloads to test the call-response speed
   radio.openWritingPipe(pipes[0]);
   radio.openReadingPipe(1,pipes[1]);
 
@@ -106,7 +105,7 @@ void loop(void) {
 
   myData.response = counter;
   myData.temperature=readFirstTemperature();
-  // myData.vcc = readVcc();
+  myData.vcc = readVcc();
 
 
     radio.powerUp();
@@ -117,7 +116,7 @@ void loop(void) {
     u8x8.setCursor(1, 1);
     u8x8.print(counter);
     u8x8.setCursor(2, 2);
-    // u8x8.print(myData.vcc);
+    u8x8.print(myData.vcc);
 
     printf("Now sending %d as payload. \n",counter);
 
@@ -132,11 +131,10 @@ void loop(void) {
       }else{
         while(radio.available() ){
           unsigned long tim = micros();
-          MyDataStruct_t responseData;
-          radio.read( &responseData, sizeof(MyDataStruct_t) );
+          radio.read( &myData, sizeof(myData) );
           unsigned long roundTrip = tim-time;
 
-          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",responseData.response,roundTrip, responseData.lightState);
+          printf("Got response %d, round-trip delay: %lu microseconds; led %d\n\r",myData.response,roundTrip, myData.lightState);
 
           u8x8.drawString(6,1,"    ");
           u8x8.setCursor(6, 1);
@@ -146,7 +144,7 @@ void loop(void) {
           u8x8.setCursor(11, 1);
           u8x8.print(roundTrip);
 
-          digitalWrite(lightControlPin, responseData.lightState);
+          digitalWrite(lightControlPin, myData.lightState);
 
 
         }
@@ -168,8 +166,8 @@ void loop(void) {
     // allow changes, disable reset
     WDTCSR = bit (WDCE) | bit (WDE);
     // set interrupt mode and an interval
-    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
-    // WDTCSR = bit (WDIE) | bit (WDP3) | bit (WDP0);    // set WDIE, and 8 seconds delay
+//    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
+    WDTCSR = bit (WDIE) | bit (WDP3) | bit (WDP0);    // set WDIE, and 8 seconds delay
     wdt_reset();  // pat the dog
 
     set_sleep_mode (SLEEP_MODE_PWR_DOWN);
@@ -236,7 +234,7 @@ float findTemperature(byte *addr){
   ds.select(addr);
   ds.write(0x44,1); // start conversion, with parasite   on at the end
 
-  ds.reset();
+  byte present = ds.reset();
   ds.select(addr);
   ds.write(0xBE); // Read Scratchpad
 
